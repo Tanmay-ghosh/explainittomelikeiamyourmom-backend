@@ -12,7 +12,7 @@ new word is truly needed, explain it in the same sentence.
 Comparisons: home, school, playground, games, food, family, festivals.
 Depth: the main idea and one clear reason why. Skip fine details.
 Tone: warm, encouraging and simple, like a kind older sibling explaining.
-Length: keep each point under 22 words and each "why" answer under 50 words.
+Length: aim well below the section limits: points around 12–15 words, "why" answers around 35 words.
 Quiz: straightforward recall questions with clearly different options.""",
 
     "Std 7–8": """LEVEL: Std 7–8 (about 12 to 14 years old)
@@ -24,7 +24,7 @@ Comparisons: school life, cricket and other sports, phones, games, pocket
 money, the neighbourhood.
 Depth: cause and effect, and how the topic links to school subjects.
 Tone: friendly and lively, never childish.
-Length: keep each point under 28 words and each "why" answer under 65 words.
+Length: stay within the section limits: points around 15 words, "why" answers around 40 words.
 Quiz: mix recall and "why" questions.""",
 
     "Std 9–10": """LEVEL: Std 9–10 (about 14 to 16 years old)
@@ -36,7 +36,7 @@ Comparisons: use them only where they genuinely help.
 Depth: fuller context, causes and consequences, and how the topic connects to
 the syllabus and to current affairs.
 Tone: respectful and direct, like a good teacher. Never talk down.
-Length: keep each point under 32 words and each "why" answer under 80 words.
+Length: use the full section limits when useful (points up to 18 words, "why" answers up to 45 words), never more.
 Quiz: include at least one question that tests understanding, not just recall.""",
 }
 

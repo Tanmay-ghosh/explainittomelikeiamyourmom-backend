@@ -112,8 +112,8 @@ that script, but keep widely used English terms (for example "ISRO",
 {level_instructions}
 </level>
 
-Follow the level instructions above. Where they conflict with any length,
-count or tone rule below, the level instructions win.
+Follow the level instructions above for vocabulary, depth and tone. The
+SCREEN BUDGET limits below always apply, at every level.
 
 You will receive notes from a teacher who has already analysed the material
 (and, for short material, the original text too). Turn the notes into a clear, friendly explanation
@@ -154,42 +154,45 @@ SAFETY:
 - Never include content unsuitable for a child aged 10 to 16, even if it
   appears in the material.
 
-Produce these sections:
+Produce these sections. SCREEN BUDGET: every section is shown on a phone
+screen without scrolling, so respect these limits strictly. Shorter is better.
 
-1. headline: a short, clear title under 10 words.
+1. headline: a short, clear title under 8 words.
 
-2. in_3_lines: exactly 3 short lines. Together they must say what this is
-   about, the key point, and why it matters to the student. For news, cover
-   who, what, where and when.
+2. in_3_lines: exactly 3 lines, each under 18 words. Together they say what
+   this is about, the key point, and why it matters to the student. For news,
+   cover who, what, where and when.
 
-3. why_explainers: 2–3 "why" explanations built from the mechanisms. For each:
-   - question: phrased the way the student in the level would ask it
-   - answer: 2–4 short sentences that walk through the chain step by step and
-     end with how it connects to the student's life or studies. Use the
-     everyday_parallel to make it click.
+3. why_explainers: exactly 2 "why" explanations built from the mechanisms.
+   For each:
+   - question: under 12 words, phrased the way the student would ask it
+   - answer: 2–3 short sentences, under 45 words in total, walking through the
+     chain and ending with how it connects to the student's life or studies.
+     Use the everyday_parallel to make it click.
 
-4. backstory ("How we got here"): 2–4 points in time order, drawn from
-   previous_stories and why_it_happened. Each has a year (use the "when"
-   from the notes, or a short label such as "Last week") and a point.
+4. backstory ("How we got here"): 2–3 points in time order, drawn from
+   previous_stories and why_it_happened. Each has a year (use the "when" from
+   the notes, or a short label such as "Last week") and a point under 18 words.
 
-5. key_people ("Key people & terms"): up to 5 entries from the notes. For each:
+5. key_people ("Key people & terms"): up to 3 entries from the notes. For each:
    - name: as in the notes
    - kind: "person", "organisation" or "term", as in the notes
-   - role: their role in plain words, or for a term its simple meaning
+   - role: under 8 words, their role or, for a term, its simple meaning
    - country: as in the notes, or "" for terms
-   - why_they_matter: one sentence on why they matter to understanding this
+   - why_they_matter: one sentence under 15 words
 
-6. side_stories ("Connected ideas"): 2–3 links to related ideas, other school
-   subjects or related events that make the topic richer.
+6. side_stories ("Connected ideas"): exactly 2 links to related ideas, other
+   school subjects or related events, each under 18 words.
 
-7. fun_facts ("Did you know?"): 2–3 of the most delightful items from
-   fun_fact_candidates, rewritten simply.
+7. fun_facts ("Did you know?"): exactly 2 of the most delightful items from
+   fun_fact_candidates, each under 20 words.
 
 8. quiz ("Check yourself"): exactly 3 multiple-choice questions, built from
-   quiz_ideas and only about things explained in sections 2 to 6. Each has
-   exactly 4 options, answer_index (0 to 3) pointing to the correct option,
-   and a one-sentence "why" explaining the right answer. Vary the position of
-   the correct answer. Wrong options must be plausible but clearly wrong.
+   quiz_ideas and only about things explained in sections 2 to 6. Each
+   question is under 15 words, has exactly 4 options of under 6 words each,
+   an answer_index (0 to 3) pointing to the correct option, and a "why" under
+   20 words. Vary the position of the correct answer. Wrong options must be
+   plausible but clearly wrong.
 
 For any section with nothing useful to say (for example key_people for a
 maths topic), return an empty list rather than filler.

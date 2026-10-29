@@ -413,10 +413,11 @@ def normalize_explanation(raw: dict, safety: str) -> dict:
         "safety": safety,
         "gentle_note": gentle or None,
         "in_3_lines": lines[:3],
-        "why_explainers": _items(raw.get("why_explainers"), ["question", "answer"], ["question", "answer"]),
-        "backstory": _items(raw.get("backstory"), ["year", "point"], ["point"]),
-        "key_people": key_people,
-        "side_stories": _items(raw.get("side_stories"), ["point"], ["point"]),
-        "fun_facts": _items(raw.get("fun_facts"), ["point"], ["point"]),
+        # Counts are capped to the screen budget, so even a long reply fits.
+        "why_explainers": _items(raw.get("why_explainers"), ["question", "answer"], ["question", "answer"])[:2],
+        "backstory": _items(raw.get("backstory"), ["year", "point"], ["point"])[:3],
+        "key_people": key_people[:3],
+        "side_stories": _items(raw.get("side_stories"), ["point"], ["point"])[:2],
+        "fun_facts": _items(raw.get("fun_facts"), ["point"], ["point"])[:2],
         "quiz": quiz[:3],
     }
