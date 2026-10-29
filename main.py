@@ -375,6 +375,27 @@ app.add_middleware(
 )
 
 
+def _openapi_with_file_picker():
+    """Describe /explain's `files` field as plain file uploads in the docs.
+
+    The endpoint also tolerates empty strings (see start_explanation), but the
+    docs should still show a file picker, not a text box.
+    """
+    if app.openapi_schema:
+        return app.openapi_schema
+    from fastapi.openapi.utils import get_openapi
+
+    schema = get_openapi(title=app.title, version=app.version, routes=app.routes)
+    body = schema.get("components", {}).get("schemas", {}).get("Body_start_explanation_explain_post")
+    if body and "files" in body.get("properties", {}):
+        body["properties"]["files"]["items"] = {"type": "string", "format": "binary"}
+    app.openapi_schema = schema
+    return schema
+
+
+app.openapi = _openapi_with_file_picker
+
+
 def validate_mode_language(mode: str, language: str):
     if mode not in MODES:
         raise HTTPException(400, f"Unknown mode. Choose one of: {', '.join(MODES)}")
@@ -420,13 +441,15 @@ async def start_explanation(
     url: str = Form(""),
     mode: str = Form("Mom mode"),
     language: str = Form("English"),
-    files: list[UploadFile] = File(default=[]),
+    # Accept str too: some clients (including the /docs page) send an empty
+    # string when no file is chosen. Those are ignored below.
+    files: list[UploadFile | str] = File(default=[]),
     x_distinct_id: str | None = Header(default=None),
 ):
     """Start explaining an article. Send ONE of: files, url, or text."""
     validate_mode_language(mode, language)
     text, url = text.strip(), url.strip()
-    files = [f for f in files if f and f.filename]
+    files = [f for f in files if not isinstance(f, str) and f.filename]
 
     if files:
         if len(files) > MAX_FILES:
