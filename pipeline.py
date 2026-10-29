@@ -149,6 +149,17 @@ SUBMIT_TOOL = {
 }
 
 
+TOOL_INSTRUCTION = """
+
+HOW TO SUBMIT: When tools are available, give your answer by calling the
+submit_result tool, passing the complete JSON object as its input. Do not
+write the answer as plain text. If no tool is available, reply with ONLY the
+JSON object, with no other text."""
+
+# Models that rejected tool use; we stop offering them tools for this process.
+_NO_TOOL_MODELS: set[str] = set()
+
+
 def _parse_json(raw: str) -> dict:
     """Fallback for plain-text replies: pull out a JSON object, repairing small slips."""
     cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip())
@@ -190,21 +201,36 @@ def _call_json(client, model, system, user, max_tokens, required_keys):
     usage = {"input_tokens": 0, "output_tokens": 0, "cache_read_tokens": 0, "cache_write_tokens": 0}
     # The system prompts are long and identical across calls, so mark them for
     # prompt caching: repeat calls read them from cache at a much lower price.
-    system_blocks = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
+    system_blocks = [{"type": "text", "text": system + TOOL_INSTRUCTION, "cache_control": {"type": "ephemeral"}}]
     messages = [{"role": "user", "content": user}]
     started = time.time()
     last_error = None
 
     for attempt in range(2):
+        use_tool = model not in _NO_TOOL_MODELS
+        request = dict(model=model, max_tokens=max_tokens, system=system_blocks, messages=messages)
+        if use_tool:
+            # "auto" lets the model decide to call the tool. Some models reject a
+            # forced tool_choice ("tool" / "any"), so we never force it.
+            request.update(tools=[SUBMIT_TOOL], tool_choice={"type": "auto"})
         try:
-            response = client.messages.create(
-                model=model,
-                max_tokens=max_tokens,
-                system=system_blocks,
-                messages=messages,
-                tools=[SUBMIT_TOOL],
-                tool_choice={"type": "tool", "name": SUBMIT_TOOL["name"]},
-            )
+            response = client.messages.create(**request)
+        except anthropic.BadRequestError as exc:
+            if use_tool and "tool" in str(exc).lower():
+                # This model won't take tools at all: remember that and fall back
+                # to a plain JSON reply, which _parse_json can repair if needed.
+                log.warning("Model %s rejected tools (%s); falling back to plain JSON", model, exc)
+                _NO_TOOL_MODELS.add(model)
+                request.pop("tools", None)
+                request.pop("tool_choice", None)
+                try:
+                    response = client.messages.create(**request)
+                except anthropic.APIError as exc2:
+                    log.warning("Claude API error: %s", exc2)
+                    raise ExplainError("Our AI helper is having trouble right now. Please try again in a minute.") from exc2
+            else:
+                log.warning("Claude API error: %s", exc)
+                raise ExplainError("Our AI helper is having trouble right now. Please try again in a minute.") from exc
         except anthropic.AuthenticationError as exc:
             raise ExplainError("The server's AI key is missing or wrong. Please tell the site owner.") from exc
         except anthropic.RateLimitError as exc:
