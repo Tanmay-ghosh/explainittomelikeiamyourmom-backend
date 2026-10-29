@@ -3,19 +3,23 @@
 The Lovable frontend talks to this server. Flow:
   1. POST /explain       -> starts a job, returns job_id immediately
   2. GET  /jobs/{job_id} -> poll every 2-3 s; shows the stage, then the explanation
-  3. POST /explain-again -> same article in another mode/language (reuses the
-                            expert notes, so it's fast and cheap)
+  3. POST /explain-again -> same material at another class level or language
+                            (reuses the expert notes, so it's fast and cheap)
+  4. GET  /stories       -> this week's ready-made stories
+  5. GET  /stories/{id}  -> one story's explanation at a class level
 
 Jobs and caches live in memory, so run exactly ONE server process.
 """
 
 import hashlib
+import json
 import logging
 import os
 import threading
 import time
 import uuid
 from collections import OrderedDict, deque
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
@@ -25,11 +29,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 import analytics
-from modes import LANGUAGES, MODE_BLURBS, MODES
+from modes import DEFAULT_LEVEL, LANGUAGES, LEVEL_BLURBS, LEVELS
 from pipeline import (
     EXPERT_MODEL,
     WRITER_MODEL,
     ExplainError,
+    normalize_explanation,
+    not_suitable_explanation,
     prepare_article,
     run_expert,
     run_writer,
@@ -76,11 +82,11 @@ IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png")
 JOB_TTL_SECONDS = 2 * 60 * 60
 
 STAGE_MESSAGES = {
-    "queued": "Getting started…",
-    "reading": "Reading your article…",
-    "expert": "The expert is studying the article…",
-    "writing": "Writing it up simply…",
-    "done": "Done",
+    "queued": "Getting ready…",
+    "reading": "Reading what you shared…",
+    "expert": "Our expert is thinking…",
+    "writing": "Making it simple for you…",
+    "done": "Done!",
     "error": "Something went wrong",
 }
 
@@ -112,7 +118,7 @@ class LRU:
 
 articles = LRU(200)        # article_id -> {"text", "trimmed", "input_type"}
 notes_cache = LRU(200)     # article_id -> (expert_notes, usage)
-results_cache = LRU(600)   # (article_id, mode, language) -> (explanation, usage)
+results_cache = LRU(600)   # (article_id, level, language) -> (explanation, usage)
 
 jobs: dict[str, dict] = {}
 jobs_lock = threading.Lock()
@@ -187,12 +193,12 @@ def estimate_cost(*usages) -> float | None:
     return round(total / 1_000_000, 5)
 
 
-def new_job(mode: str, language: str, input_type: str, distinct_id: str | None) -> dict:
+def new_job(level: str, language: str, input_type: str, distinct_id: str | None) -> dict:
     job = {
         "job_id": uuid.uuid4().hex,
         "status": "queued",
         "error": None,
-        "mode": mode,
+        "level": level,
         "language": language,
         "input_type": input_type,
         "article_id": None,
@@ -223,7 +229,7 @@ def public_view(job: dict, include_notes: bool = False) -> dict:
         "message": job["error"] if job["status"] == "error" else STAGE_MESSAGES[job["status"]],
         "error": job["error"],
         "article_id": job["article_id"],
-        "mode": job["mode"],
+        "level": job["level"],
         "language": job["language"],
         "explanation": job["explanation"],
         "meta": job["meta"],
@@ -253,12 +259,16 @@ def explain(job: dict, article_id: str):
         notes_cache.set(article_id, cached_notes)
     notes, expert_usage = cached_notes
 
-    key = (article_id, job["mode"], job["language"])
+    key = (article_id, job["level"], job["language"])
     cached_result = results_cache.get(key)
     writer_cached = cached_result is not None
     if not writer_cached:
-        set_status(job, "writing")
-        cached_result = run_writer(get_client(), article["text"], notes, MODES[job["mode"]], job["language"])
+        if notes.get("safety") == "not_suitable":
+            # Never explain unsuitable material: skip the Writer entirely.
+            cached_result = (not_suitable_explanation(), {"input_tokens": 0, "output_tokens": 0})
+        else:
+            set_status(job, "writing")
+            cached_result = run_writer(get_client(), article["text"], notes, LEVELS[job["level"]], job["language"])
         results_cache.set(key, cached_result)
     result, writer_usage = cached_result
 
@@ -272,7 +282,7 @@ def explain(job: dict, article_id: str):
         "models": {"expert": EXPERT_MODEL, "writer": WRITER_MODEL},
     })
     job["meta"] = {
-        "genre": notes.get("genre"),
+        "subject": notes.get("subject"),
         "topic": notes.get("topic"),
         "expert_role": notes.get("expert_role"),
         "trimmed": article["trimmed"],
@@ -284,10 +294,12 @@ def explain(job: dict, article_id: str):
     job["finished_at"] = time.time()
 
     analytics.track(job["distinct_id"], "Explanation Completed", {
-        "mode": job["mode"],
+        "level": job["level"],
         "language": job["language"],
         "input_type": article["input_type"],
-        "genre": notes.get("genre"),
+        "subject": notes.get("subject"),
+        "material_type": notes.get("material_type"),
+        "safety": notes.get("safety"),
         "article_chars": len(article["text"]),
         "trimmed": article["trimmed"],
         "expert_cached": expert_cached,
@@ -357,7 +369,7 @@ def fail(job: dict, message: str):
     analytics.track(job["distinct_id"], "Explanation Failed", {
         "stage": failed_stage,
         "input_type": job["input_type"],
-        "mode": job["mode"],
+        "level": job["level"],
         "language": job["language"],
         "error_message": message,
     })
@@ -396,9 +408,9 @@ def _openapi_with_file_picker():
 app.openapi = _openapi_with_file_picker
 
 
-def validate_mode_language(mode: str, language: str):
-    if mode not in MODES:
-        raise HTTPException(400, f"Unknown mode. Choose one of: {', '.join(MODES)}")
+def validate_level_language(level: str, language: str):
+    if level not in LEVELS:
+        raise HTTPException(400, f"Unknown class level. Choose one of: {', '.join(LEVELS)}")
     if language not in LANGUAGES:
         raise HTTPException(400, f"Unknown language. Choose one of: {', '.join(LANGUAGES)}")
 
@@ -420,10 +432,10 @@ def health():
 
 @app.get("/config")
 def config():
-    """Everything the frontend needs to draw its mode and language pickers."""
+    """Everything the frontend needs to draw its class and language pickers."""
     return {
-        "modes": [{"id": m, "blurb": MODE_BLURBS[m]} for m in MODES],
-        "default_mode": "Mom mode",
+        "levels": [{"id": lv, "blurb": LEVEL_BLURBS[lv]} for lv in LEVELS],
+        "default_level": DEFAULT_LEVEL,
         "languages": LANGUAGES,
         "default_language": "English",
         "upload": {
@@ -439,15 +451,15 @@ async def start_explanation(
     request: Request,
     text: str = Form(""),
     url: str = Form(""),
-    mode: str = Form("Mom mode"),
+    level: str = Form(DEFAULT_LEVEL),
     language: str = Form("English"),
     # Accept str too: some clients (including the /docs page) send an empty
     # string when no file is chosen. Those are ignored below.
     files: list[UploadFile | str] = File(default=[]),
     x_distinct_id: str | None = Header(default=None),
 ):
-    """Start explaining an article. Send ONE of: files, url, or text."""
-    validate_mode_language(mode, language)
+    """Start explaining study material or an article. Send ONE of: files, url, or text."""
+    validate_level_language(level, language)
     text, url = text.strip(), url.strip()
     files = [f for f in files if not isinstance(f, str) and f.filename]
 
@@ -473,27 +485,27 @@ async def start_explanation(
     else:
         raise HTTPException(400, "Paste some text, upload a file, or add a link first.")
 
-    # Same pasted article already explained in this mode and language: answer instantly, free.
+    # Same pasted article already explained at this class level and language: answer instantly, free.
     if input_type == "text":
         try:
             prepared, _ = prepare_article(text)
         except ExplainError as err:
             raise HTTPException(400, str(err))
         aid = article_id_for(prepared)
-        if results_cache.get((aid, mode, language)) and articles.get(aid):
-            job = new_job(mode, language, input_type, x_distinct_id)
+        if results_cache.get((aid, level, language)) and articles.get(aid):
+            job = new_job(level, language, input_type, x_distinct_id)
             process_rewrite(job, aid)
             return public_view(job)
 
     check_limits(client_ip(request), x_distinct_id)
-    job = new_job(mode, language, input_type, x_distinct_id)
+    job = new_job(level, language, input_type, x_distinct_id)
     executor.submit(process_new_article, job, text, url, payload)
     return public_view(job)
 
 
 class ExplainAgainRequest(BaseModel):
     article_id: str
-    mode: str
+    level: str
     language: str
 
 
@@ -503,13 +515,13 @@ def explain_again(
     request: Request,
     x_distinct_id: str | None = Header(default=None),
 ):
-    """Same article, different mode or language. Reuses the expert's notes."""
-    validate_mode_language(body.mode, body.language)
+    """Same material, different class level or language. Reuses the expert's notes."""
+    validate_level_language(body.level, body.language)
     if articles.get(body.article_id) is None:
-        raise HTTPException(404, "This article has expired. Please submit it again.")
+        raise HTTPException(404, "This took too long and expired. Please share it again.")
 
-    job = new_job(body.mode, body.language, "rewrite", x_distinct_id)
-    if results_cache.get((body.article_id, body.mode, body.language)):
+    job = new_job(body.level, body.language, "rewrite", x_distinct_id)
+    if results_cache.get((body.article_id, body.level, body.language)):
         process_rewrite(job, body.article_id)  # already made: instant and free
         return public_view(job)
 
@@ -526,3 +538,60 @@ def get_job(job_id: str, include_notes: bool = False):
     if job is None:
         raise HTTPException(404, "Job not found. It may have expired; please submit the article again.")
     return public_view(job, include_notes=include_notes)
+
+
+# ---------- this week's stories (ready-made, served from a file) ----------
+
+STORIES_FILE = Path(__file__).parent / "stories" / "this_week.json"
+STORY_FIELDS = ("id", "title", "teaser", "bucket", "topic", "safety", "source")
+
+
+def _load_stories() -> dict:
+    """Load and normalise this week's stories once, at startup."""
+    try:
+        raw = json.loads(STORIES_FILE.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        log.warning("No stories file at %s", STORIES_FILE)
+        return {"week_label": "", "stories": []}
+    stories = []
+    for item in raw.get("stories", []):
+        safety = item.get("safety") if item.get("safety") in ("fine", "heavy") else "fine"
+        story = {f: item.get(f) for f in STORY_FIELDS}
+        story["safety"] = safety
+        explanations = {
+            level: normalize_explanation(exp, safety)
+            for level, exp in (item.get("explanations") or {}).items()
+            if level in LEVELS and isinstance(exp, dict)
+        }
+        stories.append({"story": story, "explanations": explanations})
+    log.info("Loaded %d weekly stories", len(stories))
+    return {"week_label": raw.get("week_label", ""), "stories": stories}
+
+
+WEEKLY = _load_stories()
+
+
+@app.get("/stories")
+def list_stories():
+    """This week's stories, in ranked order (English for now)."""
+    return {"week_label": WEEKLY["week_label"], "stories": [s["story"] for s in WEEKLY["stories"]]}
+
+
+@app.get("/stories/{story_id}")
+def get_story(story_id: str, level: str = DEFAULT_LEVEL):
+    """One story at a class level. explanation is null while a story is still being prepared."""
+    if level not in LEVELS:
+        raise HTTPException(400, f"Unknown class level. Choose one of: {', '.join(LEVELS)}")
+    entry = next((s for s in WEEKLY["stories"] if s["story"]["id"] == story_id), None)
+    if entry is None:
+        raise HTTPException(404, "We couldn't find that story.")
+    explanations = entry["explanations"]
+    # Prefer the requested level; otherwise fall back to the closest one that exists.
+    order = list(LEVELS)
+    by_distance = sorted(order, key=lambda lv: abs(order.index(lv) - order.index(level)))
+    chosen = next((lv for lv in by_distance if lv in explanations), None)
+    return {
+        "story": entry["story"],
+        "level": chosen or level,
+        "explanation": explanations.get(chosen) if chosen else None,
+    }

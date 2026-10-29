@@ -1,4 +1,4 @@
-"""Backend: text extraction, the two AI layers, and output validation."""
+"""Backend: text extraction, the two AI layers, output validation and normalisation."""
 
 import io
 import json
@@ -90,7 +90,7 @@ def text_from_image(client, file_bytes: bytes) -> tuple[str, dict]:
             }],
         )
     except anthropic.AuthenticationError as exc:
-        raise ExplainError("The Claude API key is missing or wrong. Check your secrets file.") from exc
+        raise ExplainError("The server's AI key is missing or wrong. Please tell the site owner.") from exc
     except anthropic.APIError as exc:
         raise ExplainError(f"Claude API error while reading the image: {exc}") from exc
 
@@ -123,7 +123,7 @@ def prepare_article(text: str) -> tuple[str, bool]:
     """Clean whitespace and trim very long documents. Returns (text, was_trimmed)."""
     text = re.sub(r"\n{3,}", "\n\n", text).strip()
     if len(text) < MIN_ARTICLE_CHARS:
-        raise ExplainError("That's too short to explain. Paste the full article.")
+        raise ExplainError("That's too short to explain. Paste a bit more: at least a few sentences.")
     if len(text) > MAX_ARTICLE_CHARS:
         return text[:MAX_ARTICLE_CHARS], True
     return text, False
@@ -156,7 +156,7 @@ def _call_json(client, model, system, user, max_tokens, required_keys):
                 model=model, max_tokens=max_tokens, system=system_blocks, messages=messages
             )
         except anthropic.AuthenticationError as exc:
-            raise ExplainError("The Claude API key is missing or wrong. Check your secrets file.") from exc
+            raise ExplainError("The server's AI key is missing or wrong. Please tell the site owner.") from exc
         except anthropic.RateLimitError as exc:
             raise ExplainError("Too many requests right now. Wait a minute and try again.") from exc
         except anthropic.APIError as exc:
@@ -192,38 +192,138 @@ def _call_json(client, model, system, user, max_tokens, required_keys):
 
 
 EXPERT_KEYS = [
-    "genre", "topic", "expert_role", "core_facts", "why_it_happened", "mechanisms",
-    "previous_stories", "key_people", "key_dates", "reader_impact",
-    "explanation_plan", "tricky_terms", "fun_fact_candidates",
+    "material_type", "subject", "topic", "expert_role", "safety", "safety_reason",
+    "core_facts", "why_it_happened", "mechanisms", "previous_stories", "key_people",
+    "key_dates", "student_relevance", "explanation_plan", "tricky_terms",
+    "fun_fact_candidates", "quiz_ideas",
 ]
-WRITER_KEYS = [
-    "headline", "simple_version", "why_explainers", "backstory",
-    "side_stories", "fun_facts", "key_people",
-]
+# The Expert may legitimately skip analysis fields for unsuitable material, so
+# only the classification fields are strictly required.
+EXPERT_REQUIRED = ["subject", "topic", "safety"]
+WRITER_KEYS = ["headline", "in_3_lines", "quiz"]
+
+SAFETY_VALUES = ("fine", "heavy", "not_suitable")
+KINDS = ("person", "organisation", "term")
 
 
 def run_expert(client, article_text: str):
-    """Layer 1: analyse the article once. Mode- and language-independent."""
-    return _call_json(
+    """Layer 1: analyse the material once. Level- and language-independent."""
+    notes, usage = _call_json(
         client,
         EXPERT_MODEL,
         EXPERT_SYSTEM,
         EXPERT_USER.format(article_text=article_text),
-        max_tokens=6000,
-        required_keys=EXPERT_KEYS,
+        max_tokens=7000,
+        required_keys=EXPERT_REQUIRED,
     )
+    if notes.get("safety") not in SAFETY_VALUES:
+        notes["safety"] = "fine"
+    return notes, usage
 
 
-def run_writer(client, article_text: str, expert_notes: dict, mode_instructions: str, language: str):
-    """Layer 2: turn expert notes into the reader-facing explanation."""
-    return _call_json(
+def run_writer(client, article_text: str, expert_notes: dict, level_instructions: str, language: str):
+    """Layer 2: turn the teacher's notes into the student-facing explanation."""
+    result, usage = _call_json(
         client,
         WRITER_MODEL,
-        WRITER_SYSTEM.format(language=language, mode_instructions=mode_instructions),
+        WRITER_SYSTEM.format(language=language, level_instructions=level_instructions),
         WRITER_USER.format(
             article_text=article_text,
             expert_notes=json.dumps(expert_notes, ensure_ascii=False, indent=2),
         ),
-        max_tokens=5000,
+        max_tokens=6000,
         required_keys=WRITER_KEYS,
     )
+    return normalize_explanation(result, expert_notes.get("safety", "fine")), usage
+
+
+# ---------- Step 3: make every explanation match the frontend contract ----------
+
+def _text(value) -> str:
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _source(value) -> str:
+    return value if value in ("article", "background") else "background"
+
+
+def _items(value, fields, required):
+    """Keep only dict items whose required text fields are present."""
+    out = []
+    for item in value if isinstance(value, list) else []:
+        if not isinstance(item, dict):
+            continue
+        clean = {f: _text(item.get(f)) for f in fields}
+        if all(clean[f] for f in required):
+            clean["source"] = _source(item.get("source"))
+            out.append(clean)
+    return out
+
+
+def not_suitable_explanation() -> dict:
+    """What the frontend receives for material that must not be explained."""
+    return {
+        "headline": "",
+        "safety": "not_suitable",
+        "gentle_note": None,
+        "in_3_lines": [],
+        "why_explainers": [],
+        "backstory": [],
+        "key_people": [],
+        "side_stories": [],
+        "fun_facts": [],
+        "quiz": [],
+    }
+
+
+def normalize_explanation(raw: dict, safety: str) -> dict:
+    """Coerce the Writer's reply into exactly the shape the frontend expects."""
+    if safety == "not_suitable":
+        return not_suitable_explanation()
+
+    lines = [_text(x) for x in raw.get("in_3_lines", []) if _text(x)] if isinstance(raw.get("in_3_lines"), list) else []
+    if not lines and _text(raw.get("in_3_lines")):
+        lines = [_text(raw.get("in_3_lines"))]
+
+    key_people = []
+    for item in _items(raw.get("key_people"), ["name", "kind", "role", "country", "why_they_matter"], ["name"]):
+        if item["kind"] not in KINDS:
+            item["kind"] = "term" if not item["country"] else "person"
+        key_people.append(item)
+
+    quiz = []
+    for q in raw.get("quiz", []) if isinstance(raw.get("quiz"), list) else []:
+        if not isinstance(q, dict):
+            continue
+        options = [_text(o) for o in q.get("options", []) if _text(o)] if isinstance(q.get("options"), list) else []
+        answer = q.get("answer_index")
+        if (
+            _text(q.get("question"))
+            and len(options) >= 2
+            and isinstance(answer, int)
+            and not isinstance(answer, bool)
+            and 0 <= answer < min(len(options), 4)
+        ):
+            quiz.append({
+                "question": _text(q.get("question")),
+                "options": options[:4],
+                "answer_index": answer,
+                "why": _text(q.get("why")),
+            })
+
+    gentle = _text(raw.get("gentle_note")) if safety == "heavy" else ""
+    if safety == "heavy" and not gentle:
+        gentle = "This topic is about something serious. It's okay to feel worried. Talking to a parent or teacher can help."
+
+    return {
+        "headline": _text(raw.get("headline")) or "Here's what this means",
+        "safety": safety,
+        "gentle_note": gentle or None,
+        "in_3_lines": lines[:3],
+        "why_explainers": _items(raw.get("why_explainers"), ["question", "answer"], ["question", "answer"]),
+        "backstory": _items(raw.get("backstory"), ["year", "point"], ["point"]),
+        "key_people": key_people,
+        "side_stories": _items(raw.get("side_stories"), ["point"], ["point"]),
+        "fun_facts": _items(raw.get("fun_facts"), ["point"], ["point"]),
+        "quiz": quiz[:3],
+    }

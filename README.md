@@ -15,7 +15,8 @@ Lovable frontend ──POST /explain──▶ this API ──▶ Claude (read im
 | `main.py` | The API: endpoints, jobs, caching, limits, CORS |
 | `pipeline.py` | Text extraction (PDF, image, link) and the two Claude calls, with JSON checks, retries and prompt caching |
 | `prompts.py` | The Expert and Writer prompts |
-| `modes.py` | Mom mode, Teen mode, Quick brief, and the language list |
+| `modes.py` | The three class levels (Std 5–6, 7–8, 9–10) and the language list |
+| `stories/this_week.json` | This week's ready-made stories and their explanations |
 | `analytics.py` | Server-side Mixpanel events (off until `MIXPANEL_TOKEN` is set) |
 | `Dockerfile`, `.dockerignore` | How Cloud Run builds and starts the server |
 | `.env.example` | Every setting, with explanations |
@@ -112,77 +113,69 @@ Then open http://localhost:8000/docs.
 
 ---
 
-## API guide (for building the Lovable frontend)
+## API guide (what the Lovable frontend uses)
 
-Base URL: your Cloud Run service URL. All responses are JSON.
+Base URL: your Cloud Run service URL. All responses are JSON. Class levels are exactly `Std 5–6`, `Std 7–8`, `Std 9–10` (with an en dash). Languages are `English`, `Hindi`, `Bengali`.
 
 ### `GET /health`
-Call this as soon as the page loads, so the server is awake by the time the user submits.
+Called when the page loads, so the server is awake by the time a student submits.
 
 ### `GET /config`
-Returns the modes (with short blurbs), languages, and upload limits, so the frontend can draw its pickers without hard-coding them.
+Class levels (with short blurbs), languages and upload limits.
 
-### `POST /explain` — start an explanation
-Send as **multipart form data**, with exactly ONE input:
-
-| Field | Type | Notes |
-|---|---|---|
-| `text` | string | Pasted article text |
-| `url` | string | Article link (some sites block this; suggest pasting if it fails) |
-| `files` | file(s) | PDF, JPG or PNG. Repeat the field for several photos, in reading order |
-| `mode` | string | `Mom mode`, `Teen mode` or `Quick brief` (default `Mom mode`) |
-| `language` | string | `English`, `Hindi` or `Bengali` (default `English`) |
-
-Optional header: `X-Distinct-Id` set to the Mixpanel browser distinct ID, so backend events join the same user in Mixpanel.
-
-Returns `202` with a job (see below). If the same pasted article was already explained in that mode and language, the job comes back already `done`.
+### `POST /explain` — explain notes, a chapter or an article
+Multipart form data with exactly ONE input: `text`, `url`, or one or more `files` (PDF, JPG, PNG; repeat the field for several pages, in order). Also `level` and `language`. Optional header `X-Distinct-Id` (the Mixpanel browser ID). Returns `202` with a job.
 
 ### `GET /jobs/{job_id}` — check progress
-Poll every 2–3 seconds until `status` is `done` or `error`.
+Poll every 2–3 seconds until `status` is `done` or `error`. Stages: `queued` → `reading` → `expert` → `writing` → `done`.
 
 ```json
 {
-  "job_id": "…",
-  "status": "queued | reading | expert | writing | done | error",
-  "message": "The expert is studying the article…",
-  "error": null,
-  "article_id": "a1b2c3…",
-  "mode": "Mom mode",
-  "language": "English",
+  "job_id": "…", "status": "done", "message": "Done!", "error": null,
+  "article_id": "…", "level": "Std 7–8", "language": "English",
   "explanation": {
     "headline": "…",
-    "simple_version": "…",
+    "safety": "fine | heavy | not_suitable",
+    "gentle_note": "string or null (only for heavy topics)",
+    "in_3_lines": ["…", "…", "…"],
     "why_explainers": [{"question": "…", "answer": "…", "source": "article|background"}],
-    "backstory": [{"point": "…", "source": "article|background"}],
-    "side_stories": [{"point": "…", "source": "article|background"}],
-    "fun_facts": [{"point": "…", "source": "article|background"}],
-    "key_people": [{"name": "…", "role": "…", "country": "…", "why_they_matter": "…", "source": "article|background"}]
+    "backstory": [{"year": "…", "point": "…", "source": "…"}],
+    "key_people": [{"name": "…", "kind": "person|organisation|term", "role": "…", "country": "…", "why_they_matter": "…", "source": "…"}],
+    "side_stories": [{"point": "…", "source": "…"}],
+    "fun_facts": [{"point": "…", "source": "…"}],
+    "quiz": [{"question": "…", "options": ["…","…","…","…"], "answer_index": 0, "why": "…"}]
   },
-  "meta": {"genre": "…", "topic": "…", "expert_role": "…", "trimmed": false, "input_type": "text"},
+  "meta": {"subject": "Biology", "topic": "…", "trimmed": false},
   "usage": {"expert": {…}, "writer": {…}, "estimated_cost_usd": 0.02}
 }
 ```
-Show `message` to the user while waiting. `explanation` is filled in once `status` is `done`. On `error`, show `error`; it's always written in plain language. Add `?include_notes=true` to also get the Expert's raw notes (useful for a builder or debug view).
+If `explanation.safety` is `not_suitable`, every list is empty and the frontend shows its "ask a grown-up" screen. Add `?include_notes=true` to also get the Expert's raw notes.
 
-### `POST /explain-again` — switch mode or language
-JSON body: `{"article_id": "…", "mode": "Teen mode", "language": "Hindi"}`. Returns a new job to poll. It reuses the Expert's notes, so only the Writer runs: faster and cheaper. If that combination was made before, the job comes back already `done`.
+### `POST /explain-again` — switch class level or language
+JSON `{"article_id": "…", "level": "Std 9–10", "language": "Hindi"}`. Returns a new job. Reuses the Expert's notes, so only the Writer runs.
+
+### `GET /stories` — this week's stories
+`{"week_label": "…", "stories": [{"id", "title", "teaser", "bucket", "topic", "safety", "source": {"name", "url"}}]}`
+
+### `GET /stories/{id}?level=Std 7–8`
+`{"story": {…}, "level": "Std 7–8", "explanation": {…} | null}`. `explanation` is `null` while a story is still being prepared. If the requested level isn't written yet, the closest available level is returned (and `level` says which).
+
+**Updating the weekly stories:** edit `stories/this_week.json`. Each story's `explanations` maps a class level to an explanation object in the format above. Commit the file and Cloud Run redeploys with the new stories.
 
 ### Errors
-- `400`: bad input (wrong file type, too short, unknown mode). `detail` explains it in plain language.
-- `404`: job or article expired (kept for about 2 hours). Ask the user to submit again.
-- `429`: the daily limit or the per-visitor hourly limit was reached. Show `detail` as is.
+- `400`: bad input (wrong file type, too short, unknown level). `detail` explains it in plain language.
+- `404`: job, article or story not found or expired.
+- `429`: daily limit or per-visitor hourly limit reached.
 
-### Source badges
-Each point carries `source`. Show `article` items as "From the article" and `background` items as "Background, worth checking".
-
----
+### Safety
+The Expert rates every input `fine`, `heavy` or `not_suitable`. Heavy topics are explained gently with a `gentle_note`; unsuitable material is never sent to the Writer.
 
 ## Mixpanel events sent by the backend
 
 | Event | When | Key properties |
 |---|---|---|
-| `Explanation Completed` | An explanation is ready | mode, language, input_type, genre, seconds_total, expert_cached, writer_cached, is_rewrite, input/output/cache tokens, estimated_cost_usd, json_retries |
-| `Explanation Failed` | Any job fails | stage, input_type, mode, language, error_message |
+| `Explanation Completed` | An explanation is ready | level, language, input_type, subject, material_type, safety, seconds_total, expert_cached, writer_cached, is_rewrite, input/output/cache tokens, estimated_cost_usd, json_retries |
+| `Explanation Failed` | Any job fails | stage, input_type, level, language, error_message |
 | `Limit Reached` | Daily or per-visitor limit hit | limit, limit_value |
 
 Visits, page views, button clicks and feedback are tracked in the frontend with Mixpanel's browser library. Article text is never sent to Mixpanel.
