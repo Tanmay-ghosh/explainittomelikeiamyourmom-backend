@@ -3,6 +3,7 @@
 import io
 import json
 import logging
+import os
 import re
 import time
 
@@ -11,8 +12,12 @@ from pypdf import PdfReader
 
 from prompts import EXPERT_SYSTEM, EXPERT_USER, WRITER_SYSTEM, WRITER_USER
 
-EXPERT_MODEL = "claude-sonnet-5-5"
-WRITER_MODEL = "claude-sonnet-5-5"
+# Models are settings, so they can be changed on Cloud Run without a code change.
+# The Expert does the hard thinking (facts, causes, safety), so it gets the
+# bigger model. The Writer only rephrases the Expert's notes, so a smaller,
+# cheaper model does that job well.
+EXPERT_MODEL = os.environ.get("EXPERT_MODEL", "claude-sonnet-5-5")
+WRITER_MODEL = os.environ.get("WRITER_MODEL", "claude-haiku-5-5")
 MAX_ARTICLE_CHARS = 60_000  # keeps very long PDFs within a sensible budget
 MIN_ARTICLE_CHARS = 200
 
@@ -38,7 +43,7 @@ def text_from_pdf(file_bytes: bytes) -> str:
     return text
 
 
-TRANSCRIBE_MODEL = "claude-sonnet-5-5"
+TRANSCRIBE_MODEL = os.environ.get("TRANSCRIBE_MODEL", "claude-sonnet-5-5")  # reading photos needs good vision
 MAX_IMAGE_SIDE = 2000          # pixels; larger photos are scaled down first
 MAX_IMAGE_BYTES = 4_500_000    # stay under the API's per-image size limit
 

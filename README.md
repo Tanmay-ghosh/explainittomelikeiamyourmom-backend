@@ -181,4 +181,4 @@ The Expert rates every input `fine`, `heavy` or `not_suitable`. Heavy topics are
 Visits, page views, button clicks and feedback are tracked in the frontend with Mixpanel's browser library. Article text is never sent to Mixpanel.
 
 ## Settings you can change
-Set with `gcloud run services update` (see step 5 and `.env.example`): `DAILY_EXPLANATION_LIMIT`, `PER_IP_HOURLY_LIMIT`, `MAX_FILES`, `MAX_FILE_MB`, `WORKERS`, `ALLOWED_ORIGINS` (add your own domain once you connect one), `ALLOWED_ORIGIN_REGEX`. Models are set at the top of `pipeline.py` (`EXPERT_MODEL`, `WRITER_MODEL`, `TRANSCRIBE_MODEL`).
+Set with `gcloud run services update` (see step 5 and `.env.example`): `DAILY_EXPLANATION_LIMIT`, `PER_IP_HOURLY_LIMIT`, `MAX_FILES`, `MAX_FILE_MB`, `WORKERS`, `ALLOWED_ORIGINS` (add your own domain once you connect one), `ALLOWED_ORIGIN_REGEX`. Models are settings too: `EXPERT_MODEL` (default `claude-sonnet-5-5`), `WRITER_MODEL` (default `claude-haiku-5-5`, cheaper, since it only rephrases) and `TRANSCRIBE_MODEL` (default `claude-sonnet-5-5`, for reading photos). Change them with `gcloud run services update ... --update-env-vars WRITER_MODEL=...` and no rebuild.
