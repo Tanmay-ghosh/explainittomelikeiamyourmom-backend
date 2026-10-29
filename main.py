@@ -255,7 +255,7 @@ def explain(job: dict, article_id: str):
     expert_cached = cached_notes is not None
     if not expert_cached:
         set_status(job, "expert")
-        cached_notes = run_expert(get_client(), article["text"])
+        cached_notes = run_expert(get_client(), article["text"], article["input_type"])
         notes_cache.set(article_id, cached_notes)
     notes, expert_usage = cached_notes
 
@@ -279,12 +279,11 @@ def explain(job: dict, article_id: str):
         "expert": {**expert_usage, "cached": expert_cached},
         "writer": {**writer_usage, "cached": writer_cached},
         "estimated_cost_usd": estimate_cost(read_usage, fresh_expert, fresh_writer),
-        "models": {"expert": EXPERT_MODEL, "writer": WRITER_MODEL},
+        "models": {"expert": expert_usage.get("model", EXPERT_MODEL), "writer": writer_usage.get("model", WRITER_MODEL)},
     })
     job["meta"] = {
         "subject": notes.get("subject"),
         "topic": notes.get("topic"),
-        "expert_role": notes.get("expert_role"),
         "trimmed": article["trimmed"],
         "input_type": article["input_type"],
         "article_chars": len(article["text"]),
@@ -298,12 +297,13 @@ def explain(job: dict, article_id: str):
         "language": job["language"],
         "input_type": article["input_type"],
         "subject": notes.get("subject"),
-        "material_type": notes.get("material_type"),
         "safety": notes.get("safety"),
         "article_chars": len(article["text"]),
         "trimmed": article["trimmed"],
         "expert_cached": expert_cached,
         "writer_cached": writer_cached,
+        "expert_model": expert_usage.get("model"),
+        "writer_model": writer_usage.get("model"),
         "is_rewrite": job["input_type"] == "rewrite",
         "seconds_total": round(job["finished_at"] - job["created_at"], 1),
         "seconds_ai": round(job["finished_at"] - started, 1),

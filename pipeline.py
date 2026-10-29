@@ -18,6 +18,13 @@ from prompts import EXPERT_SYSTEM, EXPERT_USER, WRITER_SYSTEM, WRITER_USER
 # cheaper model does that job well.
 EXPERT_MODEL = os.environ.get("EXPERT_MODEL", "claude-sonnet-5-5")
 WRITER_MODEL = os.environ.get("WRITER_MODEL", "claude-haiku-5-5")
+# Speed: short, simple text (a paragraph or two of notes) goes to the faster,
+# cheaper model for the Expert step too. Set SHORT_INPUT_CHARS=0 to turn off.
+EXPERT_MODEL_FAST = os.environ.get("EXPERT_MODEL_FAST", "claude-haiku-5-5")
+SHORT_INPUT_CHARS = int(os.environ.get("SHORT_INPUT_CHARS", "2500") or 0)
+# The Writer re-reads the original text only when it is short; for long
+# documents it works from the Expert's notes alone (faster, cheaper).
+WRITER_ARTICLE_CHARS = int(os.environ.get("WRITER_ARTICLE_CHARS", "6000") or 0)
 MAX_ARTICLE_CHARS = 60_000  # keeps very long PDFs within a sensible budget
 MIN_ARTICLE_CHARS = 200
 
@@ -264,10 +271,9 @@ def _call_json(client, model, system, user, max_tokens, required_keys):
 
 
 EXPERT_KEYS = [
-    "material_type", "subject", "topic", "expert_role", "safety", "safety_reason",
-    "core_facts", "why_it_happened", "mechanisms", "previous_stories", "key_people",
-    "key_dates", "student_relevance", "explanation_plan", "tricky_terms",
-    "fun_fact_candidates", "quiz_ideas",
+    "subject", "topic", "safety", "core_facts", "why_it_happened", "mechanisms",
+    "previous_stories", "key_people", "student_relevance", "explanation_plan",
+    "tricky_terms", "fun_fact_candidates", "quiz_ideas",
 ]
 # The Expert may legitimately skip analysis fields for unsuitable material, so
 # only the classification fields are strictly required.
@@ -278,16 +284,25 @@ SAFETY_VALUES = ("fine", "heavy", "not_suitable")
 KINDS = ("person", "organisation", "term")
 
 
-def run_expert(client, article_text: str):
+def expert_model_for(article_text: str, input_type: str = "text") -> str:
+    """Short typed or pasted text uses the fast model; photos, PDFs, links and long text use the full model."""
+    if SHORT_INPUT_CHARS and input_type in ("text", "rewrite") and len(article_text) <= SHORT_INPUT_CHARS:
+        return EXPERT_MODEL_FAST
+    return EXPERT_MODEL
+
+
+def run_expert(client, article_text: str, input_type: str = "text"):
     """Layer 1: analyse the material once. Level- and language-independent."""
+    model = expert_model_for(article_text, input_type)
     notes, usage = _call_json(
         client,
-        EXPERT_MODEL,
+        model,
         EXPERT_SYSTEM,
         EXPERT_USER.format(article_text=article_text),
-        max_tokens=12000,
+        max_tokens=8000,
         required_keys=EXPERT_REQUIRED,
     )
+    usage["model"] = model
     if notes.get("safety") not in SAFETY_VALUES:
         notes["safety"] = "fine"
     return notes, usage
@@ -300,12 +315,18 @@ def run_writer(client, article_text: str, expert_notes: dict, level_instructions
         WRITER_MODEL,
         WRITER_SYSTEM.format(language=language, level_instructions=level_instructions),
         WRITER_USER.format(
-            article_text=article_text,
-            expert_notes=json.dumps(expert_notes, ensure_ascii=False, indent=2),
+            material_block=(
+                f"Here is the original material:\n\n<material>\n{article_text}\n</material>\n\n"
+                if WRITER_ARTICLE_CHARS and len(article_text) <= WRITER_ARTICLE_CHARS
+                else ""
+            ),
+            # Compact JSON: fewer tokens for the Writer to read.
+            expert_notes=json.dumps(expert_notes, ensure_ascii=False, separators=(",", ":")),
         ),
-        max_tokens=10000,
+        max_tokens=8000,
         required_keys=WRITER_KEYS,
     )
+    usage["model"] = WRITER_MODEL
     return normalize_explanation(result, expert_notes.get("safety", "fine")), usage
 
 
