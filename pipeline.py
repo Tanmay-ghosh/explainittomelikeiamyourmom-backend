@@ -2,6 +2,7 @@
 
 import io
 import json
+import logging
 import re
 import time
 
@@ -131,45 +132,91 @@ def prepare_article(text: str) -> tuple[str, bool]:
 
 # ---------- Step 2: call Claude and get JSON back ----------
 
+log = logging.getLogger("explainittomelikeiamyourmom.pipeline")
+
+# Claude returns its answer through a forced "tool call". The API hands the
+# arguments back as an already-parsed object, so stray quote marks or other
+# JSON typing slips in long text can't break parsing.
+SUBMIT_TOOL = {
+    "name": "submit_result",
+    "description": "Submit your complete answer as a single JSON object in exactly the shape described in the instructions.",
+    "input_schema": {"type": "object", "additionalProperties": True},
+}
+
+
 def _parse_json(raw: str) -> dict:
-    """Pull a JSON object out of the model's reply, tolerating ``` fences."""
+    """Fallback for plain-text replies: pull out a JSON object, repairing small slips."""
     cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip())
     start, end = cleaned.find("{"), cleaned.rfind("}")
     if start == -1 or end == -1:
         raise ValueError("no JSON object found")
-    return json.loads(cleaned[start : end + 1])
+    candidate = cleaned[start : end + 1]
+    try:
+        return json.loads(candidate)
+    except json.JSONDecodeError:
+        import json_repair
+
+        repaired = json_repair.loads(candidate)
+        if not isinstance(repaired, dict):
+            raise ValueError("could not repair the JSON reply")
+        return repaired
+
+
+def _extract(response) -> dict:
+    """Get the structured answer out of a Claude response."""
+    for block in response.content:
+        if block.type == "tool_use" and block.name == SUBMIT_TOOL["name"]:
+            data = block.input
+            # Some replies wrap the object in a single key; unwrap it.
+            if isinstance(data, dict) and len(data) == 1:
+                only = next(iter(data.values()))
+                if isinstance(only, dict):
+                    data = only
+                elif isinstance(only, str) and only.strip().startswith("{"):
+                    data = _parse_json(only)
+            if isinstance(data, dict):
+                return data
+    text = "".join(block.text for block in response.content if block.type == "text")
+    return _parse_json(text)
 
 
 def _call_json(client, model, system, user, max_tokens, required_keys):
-    """Call Claude, parse JSON, check required keys. Retries once on bad output."""
+    """Call Claude, get a structured answer, check required keys. Tries twice."""
     usage = {"input_tokens": 0, "output_tokens": 0, "cache_read_tokens": 0, "cache_write_tokens": 0}
-    messages = [{"role": "user", "content": user}]
     # The system prompts are long and identical across calls, so mark them for
     # prompt caching: repeat calls read them from cache at a much lower price.
     system_blocks = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
+    messages = [{"role": "user", "content": user}]
     started = time.time()
     last_error = None
 
     for attempt in range(2):
         try:
             response = client.messages.create(
-                model=model, max_tokens=max_tokens, system=system_blocks, messages=messages
+                model=model,
+                max_tokens=max_tokens,
+                system=system_blocks,
+                messages=messages,
+                tools=[SUBMIT_TOOL],
+                tool_choice={"type": "tool", "name": SUBMIT_TOOL["name"]},
             )
         except anthropic.AuthenticationError as exc:
             raise ExplainError("The server's AI key is missing or wrong. Please tell the site owner.") from exc
         except anthropic.RateLimitError as exc:
-            raise ExplainError("Too many requests right now. Wait a minute and try again.") from exc
+            raise ExplainError("Lots of students are using this right now. Please wait a minute and try again.") from exc
         except anthropic.APIError as exc:
-            raise ExplainError(f"Claude API error: {exc}") from exc
+            log.warning("Claude API error: %s", exc)
+            raise ExplainError("Our AI helper is having trouble right now. Please try again in a minute.") from exc
 
         usage["input_tokens"] += response.usage.input_tokens
         usage["output_tokens"] += response.usage.output_tokens
         usage["cache_read_tokens"] += getattr(response.usage, "cache_read_input_tokens", 0) or 0
         usage["cache_write_tokens"] += getattr(response.usage, "cache_creation_input_tokens", 0) or 0
-        raw = "".join(block.text for block in response.content if block.type == "text")
 
         try:
-            data = _parse_json(raw)
+            if getattr(response, "stop_reason", None) == "max_tokens":
+                raise ValueError("reply was cut off before it finished")
+            data = _extract(response)
             missing = [key for key in required_keys if key not in data]
             if missing:
                 raise ValueError(f"missing keys: {', '.join(missing)}")
@@ -178,17 +225,11 @@ def _call_json(client, model, system, user, max_tokens, required_keys):
             return data, usage
         except (ValueError, json.JSONDecodeError) as exc:
             last_error = exc
-            # Ask the model to fix its own output once.
-            messages = messages + [
-                {"role": "assistant", "content": raw},
-                {
-                    "role": "user",
-                    "content": f"Your reply was not valid JSON in the required shape ({exc}). "
-                    "Reply again with ONLY the corrected JSON object, nothing else.",
-                },
-            ]
+            log.warning("Unusable reply from %s (attempt %d): %s", model, attempt + 1, exc)
+            # Simply ask again from scratch; the second try usually succeeds.
 
-    raise ExplainError(f"The AI returned a reply in the wrong format twice ({last_error}). Please try again.")
+    log.error("Giving up after two unusable replies: %s", last_error)
+    raise ExplainError("Our AI helper got a bit muddled explaining this one. Please try again.")
 
 
 EXPERT_KEYS = [
@@ -213,7 +254,7 @@ def run_expert(client, article_text: str):
         EXPERT_MODEL,
         EXPERT_SYSTEM,
         EXPERT_USER.format(article_text=article_text),
-        max_tokens=7000,
+        max_tokens=12000,
         required_keys=EXPERT_REQUIRED,
     )
     if notes.get("safety") not in SAFETY_VALUES:
@@ -231,7 +272,7 @@ def run_writer(client, article_text: str, expert_notes: dict, level_instructions
             article_text=article_text,
             expert_notes=json.dumps(expert_notes, ensure_ascii=False, indent=2),
         ),
-        max_tokens=6000,
+        max_tokens=10000,
         required_keys=WRITER_KEYS,
     )
     return normalize_explanation(result, expert_notes.get("safety", "fine")), usage
