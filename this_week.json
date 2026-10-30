@@ -25,36 +25,41 @@
             "⭐"
           ],
           "in_3_lines": [
-            "ISRO, India's space agency, says India will have four working rocket launch pads by 2029.",
-            "Today India launches its big rockets from two pads at Sriharikota in Andhra Pradesh.",
-            "More pads mean ISRO can launch more often, so more satellites, moon missions and maybe more astronauts."
+            "ISRO, India's space agency, says India will have **four working rocket launch pads** by 2029.",
+            "Today India launches its big rockets from **two pads at Sriharikota** in Andhra Pradesh.",
+            "More pads mean ISRO can **launch more often**, so more satellites, moon missions and maybe more astronauts."
           ],
           "why_explainers": [
             {
               "question": "Why does India need more launch pads?",
-              "answer": "A rocket takes weeks to prepare on its pad. With only two pads, rockets wait in a queue, like students waiting for one computer in the lab. More pads let ISRO prepare several rockets at the same time and launch more often.",
+              "answer": "A rocket sits on its pad for **weeks** before launch. More pads let ISRO prepare **several rockets at once**, like adding computers to a busy school lab.",
               "source": "background"
             },
             {
               "question": "Why build a new launch site in Tamil Nadu?",
-              "answer": "Some satellites must travel south over the poles. From Sriharikota, rockets going south must curve around Sri Lanka, which wastes fuel. A site at Kulasekarapattinam in Tamil Nadu lets small rockets fly straight south over the sea.",
+              "answer": "Rockets heading south from Sriharikota must **curve around Sri Lanka**, which wastes fuel. **Kulasekarapattinam** in Tamil Nadu lets small rockets fly straight south over the sea.",
+              "source": "background"
+            },
+            {
+              "question": "Why launch rockets over the sea?",
+              "answer": "If something goes wrong, falling rocket parts land in the **empty sea**, not on homes. That is why launch sites like Sriharikota sit on the **coast**.",
               "source": "background"
             }
           ],
           "backstory": [
             {
               "year": "1963",
-              "point": "India launched its first rocket from Thumba in Kerala. Parts were famously carried on a bicycle!",
+              "point": "India launched its **first rocket** from Thumba in Kerala. Parts were famously carried on a **bicycle**!",
               "source": "background"
             },
             {
               "year": "2023",
-              "point": "Chandrayaan-3 landed near the Moon's south pole after launching from Sriharikota.",
+              "point": "**Chandrayaan-3** landed near the Moon's south pole after launching from Sriharikota.",
               "source": "background"
             },
             {
               "year": "2026",
-              "point": "ISRO's chief says four launch pads will be ready by 2029.",
+              "point": "ISRO's chief says **four launch pads** will be ready by 2029.",
               "source": "article"
             }
           ],
@@ -64,7 +69,7 @@
               "kind": "person",
               "role": "Head of ISRO, India's space agency",
               "country": "India",
-              "why_they_matter": "He announced the plan and leads the people building India's rockets.",
+              "why_they_matter": "He **announced the plan** and leads the people building India's rockets.",
               "source": "article"
             },
             {
@@ -72,7 +77,7 @@
               "kind": "organisation",
               "role": "India's space agency",
               "country": "India",
-              "why_they_matter": "It builds and launches India's rockets and satellites, including the ones behind your phone's maps.",
+              "why_they_matter": "It builds and launches India's rockets and satellites, including the ones behind your **phone's maps**.",
               "source": "article"
             },
             {
@@ -80,27 +85,27 @@
               "kind": "term",
               "role": "The platform a rocket stands on while it is prepared and launched",
               "country": "",
-              "why_they_matter": "Each pad can handle one rocket at a time, so the number of pads limits how often India can launch.",
+              "why_they_matter": "Each pad handles **one rocket at a time**, so the number of pads limits how often India can launch.",
               "source": "background"
             }
           ],
           "side_stories": [
             {
-              "point": "Gaganyaan, India's mission to send astronauts to space, will need a busy and reliable launch schedule.",
+              "point": "**Gaganyaan**, India's mission to send astronauts to space, will need a busy and reliable launch schedule.",
               "source": "background"
             },
             {
-              "point": "Private Indian companies are now building rockets too, and they also need places to launch from.",
+              "point": "**Private Indian companies** are now building rockets too, and they also need places to launch from.",
               "source": "background"
             }
           ],
           "fun_facts": [
             {
-              "point": "Sriharikota is an island between a lake and the sea, a safe spot to launch rockets out over the water.",
+              "point": "Sriharikota is an **island between a lake and the sea**, a safe spot to launch rockets out over the water.",
               "source": "background"
             },
             {
-              "point": "Launching closer to the equator gives rockets a free push from Earth's spin, which saves fuel.",
+              "point": "Launching closer to the **equator** gives rockets a free push from **Earth's spin**, which saves fuel.",
               "source": "background"
             }
           ],

@@ -353,6 +353,39 @@ def _items(value, fields, required):
     return out
 
 
+def _plain(text: str) -> str:
+    return text.replace("**", "").strip()
+
+
+def _marks(text: str) -> str:
+    """Keep **highlight** pairs only when balanced; otherwise drop the markers."""
+    if text.count("**") % 2:
+        return _plain(text)
+    return text.replace("****", "").strip()
+
+
+# Fields where the Writer may highlight words with **double asterisks**
+_HIGHLIGHT_FIELDS = {"answer", "point", "why_they_matter"}
+
+
+def _tidy_marks(explanation: dict) -> dict:
+    """Balanced highlights in body text; no markers anywhere else."""
+    for key, value in explanation.items():
+        if key == "in_3_lines":
+            explanation[key] = [_marks(x) for x in value]
+        elif isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict):
+                    for f, v in item.items():
+                        if isinstance(v, str):
+                            item[f] = _marks(v) if f in _HIGHLIGHT_FIELDS else _plain(v)
+                        elif f == "options" and isinstance(v, list):
+                            item[f] = [_plain(o) if isinstance(o, str) else o for o in v]
+        elif isinstance(value, str) and key in ("headline", "gentle_note"):
+            explanation[key] = _plain(value)
+    return explanation
+
+
 def _motifs(value) -> list[str]:
     """Keep up to 5 distinct emoji: short strings with no letters or digits."""
     out: list[str] = []
@@ -419,17 +452,17 @@ def normalize_explanation(raw: dict, safety: str) -> dict:
     if safety == "heavy" and not gentle:
         gentle = "This topic is about something serious. It's okay to feel worried. Talking to a parent or teacher can help."
 
-    return {
+    return _tidy_marks({
         "headline": _text(raw.get("headline")) or "Here's what this means",
         "safety": safety,
         "gentle_note": gentle or None,
         "motifs": _motifs(raw.get("motifs")),
         "in_3_lines": lines[:3],
         # Counts are capped to the screen budget, so even a long reply fits.
-        "why_explainers": _items(raw.get("why_explainers"), ["question", "answer"], ["question", "answer"])[:2],
+        "why_explainers": _items(raw.get("why_explainers"), ["question", "answer"], ["question", "answer"])[:3],
         "backstory": _items(raw.get("backstory"), ["year", "point"], ["point"])[:3],
         "key_people": key_people[:3],
         "side_stories": _items(raw.get("side_stories"), ["point"], ["point"])[:2],
         "fun_facts": _items(raw.get("fun_facts"), ["point"], ["point"])[:2],
         "quiz": quiz[:3],
-    }
+    })

@@ -36,7 +36,7 @@ field below, and do not summarise or repeat the content anywhere.
 STEP 3: Notes for the writer. Keep every item under 25 words.
 1. core_facts: 3–5 most important facts or ideas. Keep exact figures here.
 2. why_it_happened: 2–3 causes, reasons or underlying principles.
-3. mechanisms: exactly 2 "why" chains a curious student would ask about. For
+3. mechanisms: exactly 3 "why" chains a curious student would ask about. For
    each: question; chain (2–3 short steps); everyday_parallel (a situation
    from an Indian student's daily life that works the same way).
 4. previous_stories: 2–4 earlier events, discoveries or developments that
@@ -170,12 +170,11 @@ screen without scrolling, so respect these limits strictly. Shorter is better.
    this is about, the key point, and why it matters to the student. For news,
    cover who, what, where and when.
 
-3. why_explainers: exactly 2 "why" explanations built from the mechanisms.
+3. why_explainers: exactly 3 "why" explanations, one per mechanism.
    For each:
-   - question: under 12 words, phrased the way the student would ask it
-   - answer: 2–3 short sentences, under 45 words in total, walking through the
-     chain and ending with how it connects to the student's life or studies.
-     Use the everyday_parallel to make it click.
+   - question: under 10 words, phrased the way the student would ask it
+   - answer: 2 short sentences, under 32 words in total, walking through the
+     chain. Use the everyday_parallel to make it click.
 
 4. backstory ("How we got here"): 2–3 points in time order, drawn from
    previous_stories and why_it_happened. Each has a year (use the "when" from
@@ -200,6 +199,13 @@ screen without scrolling, so respect these limits strictly. Shorter is better.
    an answer_index (0 to 3) pointing to the correct option, and a "why" under
    20 words. Vary the position of the correct answer. Wrong options must be
    plausible but clearly wrong.
+
+HIGHLIGHTS: in in_3_lines, why answers, backstory points, why_they_matter,
+side_stories and fun_facts, wrap the one or two most important words in each
+item (a key term, number, name or the main idea) in double asterisks, for
+example "ISRO wants **four launch pads** by 2029." Never highlight more than
+two phrases per item or a whole sentence. Use no other formatting anywhere,
+and no asterisks in the headline, questions, names, roles or the quiz.
 
 For any section with nothing useful to say (for example key_people for a
 maths topic), return an empty list rather than filler.
