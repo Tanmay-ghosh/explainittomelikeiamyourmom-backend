@@ -542,12 +542,31 @@ def get_job(job_id: str, include_notes: bool = False):
 
 # ---------- this week's stories (ready-made, served from a file) ----------
 
-STORIES_FILE = Path(__file__).parent / "stories" / "this_week.json"
+STORIES_DIR = Path(__file__).parent / "stories"
+STORIES_FILE = STORIES_DIR / "this_week.json"
 STORY_FIELDS = ("id", "title", "teaser", "bucket", "topic", "safety", "source")
 
 
+def _load_translations(story_ids: set) -> dict:
+    """stories/translations/<Language>.json maps story id -> {title, teaser, explanation}.
+    One explanation per language (written at the Std 7-8 level), shown for every class."""
+    out = {}
+    for lang in LANGUAGES:
+        path = STORIES_DIR / "translations" / f"{lang}.json"
+        if lang == "English" or not path.exists():
+            continue
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            log.warning("Skipping %s: %s", path, exc)
+            continue
+        out[lang] = {sid: t for sid, t in raw.items() if sid in story_ids and isinstance(t, dict)}
+        log.info("Loaded %d %s story translations", len(out[lang]), lang)
+    return out
+
+
 def _load_stories() -> dict:
-    """Load and normalise this week's stories once, at startup."""
+    """Load and normalise this week's stories (and any translations) once, at startup."""
     try:
         raw = json.loads(STORIES_FILE.read_text(encoding="utf-8"))
     except FileNotFoundError:
@@ -563,7 +582,17 @@ def _load_stories() -> dict:
             for level, exp in (item.get("explanations") or {}).items()
             if level in LEVELS and isinstance(exp, dict)
         }
-        stories.append({"story": story, "explanations": explanations})
+        stories.append({"story": story, "explanations": explanations, "translations": {}})
+    by_id = {s["story"]["id"]: s for s in stories}
+    for lang, items in _load_translations(set(by_id)).items():
+        for sid, t in items.items():
+            entry = by_id[sid]
+            exp = t.get("explanation")
+            entry["translations"][lang] = {
+                "title": t.get("title") or entry["story"]["title"],
+                "teaser": t.get("teaser") or entry["story"]["teaser"],
+                "explanation": normalize_explanation(exp, entry["story"]["safety"]) if isinstance(exp, dict) else None,
+            }
     log.info("Loaded %d weekly stories", len(stories))
     return {"week_label": raw.get("week_label", ""), "stories": stories}
 
@@ -571,20 +600,37 @@ def _load_stories() -> dict:
 WEEKLY = _load_stories()
 
 
+def _story_in(entry: dict, language: str) -> tuple[dict, dict | None]:
+    """The story card fields in the chosen language, and its translation if there is one."""
+    t = entry["translations"].get(language)
+    if not t:
+        return entry["story"], None
+    return {**entry["story"], "title": t["title"], "teaser": t["teaser"]}, t
+
+
 @app.get("/stories")
-def list_stories():
-    """This week's stories, in ranked order (English for now)."""
-    return {"week_label": WEEKLY["week_label"], "stories": [s["story"] for s in WEEKLY["stories"]]}
+def list_stories(language: str = "English"):
+    """This week's stories, in ranked order. Titles come in the chosen language where translated."""
+    if language not in LANGUAGES:
+        raise HTTPException(400, f"Unknown language. Choose one of: {', '.join(LANGUAGES)}")
+    stories = []
+    for s in WEEKLY["stories"]:
+        story, t = _story_in(s, language)
+        stories.append({**story, "language": language if t else "English"})
+    return {"week_label": WEEKLY["week_label"], "stories": stories}
 
 
 @app.get("/stories/{story_id}")
-def get_story(story_id: str, level: str = DEFAULT_LEVEL):
-    """One story at a class level. explanation is null while a story is still being prepared."""
-    if level not in LEVELS:
-        raise HTTPException(400, f"Unknown class level. Choose one of: {', '.join(LEVELS)}")
+def get_story(story_id: str, level: str = DEFAULT_LEVEL, language: str = "English"):
+    """One story at a class level and language. Falls back to English if a translation is missing.
+    explanation is null while a story is still being prepared."""
+    validate_level_language(level, language)
     entry = next((s for s in WEEKLY["stories"] if s["story"]["id"] == story_id), None)
     if entry is None:
         raise HTTPException(404, "We couldn't find that story.")
+    story, t = _story_in(entry, language)
+    if t and t["explanation"]:
+        return {"story": story, "level": level, "language": language, "explanation": t["explanation"]}
     explanations = entry["explanations"]
     # Prefer the requested level; otherwise fall back to the closest one that exists.
     order = list(LEVELS)
@@ -593,5 +639,6 @@ def get_story(story_id: str, level: str = DEFAULT_LEVEL):
     return {
         "story": entry["story"],
         "level": chosen or level,
+        "language": "English",
         "explanation": explanations.get(chosen) if chosen else None,
     }
