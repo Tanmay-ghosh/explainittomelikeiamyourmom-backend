@@ -353,12 +353,23 @@ def _items(value, fields, required):
     return out
 
 
+def _motifs(value) -> list[str]:
+    """Keep up to 5 distinct emoji: short strings with no letters or digits."""
+    out: list[str] = []
+    for m in value if isinstance(value, list) else []:
+        m = _text(m)
+        if m and len(m) <= 8 and not any(ch.isalnum() for ch in m) and m not in out:
+            out.append(m)
+    return out[:5]
+
+
 def not_suitable_explanation() -> dict:
     """What the frontend receives for material that must not be explained."""
     return {
         "headline": "",
         "safety": "not_suitable",
         "gentle_note": None,
+        "motifs": [],
         "in_3_lines": [],
         "why_explainers": [],
         "backstory": [],
@@ -412,6 +423,7 @@ def normalize_explanation(raw: dict, safety: str) -> dict:
         "headline": _text(raw.get("headline")) or "Here's what this means",
         "safety": safety,
         "gentle_note": gentle or None,
+        "motifs": _motifs(raw.get("motifs")),
         "in_3_lines": lines[:3],
         # Counts are capped to the screen budget, so even a long reply fits.
         "why_explainers": _items(raw.get("why_explainers"), ["question", "answer"], ["question", "answer"])[:2],

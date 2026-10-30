@@ -1,0 +1,263 @@
+{
+  "week_label": "Week of 22–28 October 2026",
+  "_how_to_update": "Each story's 'explanations' maps a class level ('Std 5–6', 'Std 7–8', 'Std 9–10') to an explanation object in the same format the API returns. Stories with no explanations show as 'being prepared'. Missing levels fall back to the closest available level.",
+  "stories": [
+    {
+      "id": "isro-four-launch-pads",
+      "title": "India plans four rocket launch pads by 2029",
+      "teaser": "More launch pads mean more rockets, and more chances to explore space.",
+      "bucket": "national",
+      "topic": "Space",
+      "safety": "fine",
+      "source": {
+        "name": "News on AIR",
+        "url": "https://newsonair.gov.in/india-to-expand-its-space-operations-with-four-functional-launch-pads-by-2029-says-isro-chairman/"
+      },
+      "explanations": {
+        "Std 7–8": {
+          "headline": "India plans four rocket launch pads by 2029",
+          "gentle_note": null,
+          "motifs": [
+            "🚀",
+            "🛰️",
+            "🌕",
+            "🏝️",
+            "⭐"
+          ],
+          "in_3_lines": [
+            "ISRO, India's space agency, says India will have four working rocket launch pads by 2029.",
+            "Today India launches its big rockets from two pads at Sriharikota in Andhra Pradesh.",
+            "More pads mean ISRO can launch more often, so more satellites, moon missions and maybe more astronauts."
+          ],
+          "why_explainers": [
+            {
+              "question": "Why does India need more launch pads?",
+              "answer": "A rocket takes weeks to prepare on its pad. With only two pads, rockets wait in a queue, like students waiting for one computer in the lab. More pads let ISRO prepare several rockets at the same time and launch more often.",
+              "source": "background"
+            },
+            {
+              "question": "Why build a new launch site in Tamil Nadu?",
+              "answer": "Some satellites must travel south over the poles. From Sriharikota, rockets going south must curve around Sri Lanka, which wastes fuel. A site at Kulasekarapattinam in Tamil Nadu lets small rockets fly straight south over the sea.",
+              "source": "background"
+            }
+          ],
+          "backstory": [
+            {
+              "year": "1963",
+              "point": "India launched its first rocket from Thumba in Kerala. Parts were famously carried on a bicycle!",
+              "source": "background"
+            },
+            {
+              "year": "2023",
+              "point": "Chandrayaan-3 landed near the Moon's south pole after launching from Sriharikota.",
+              "source": "background"
+            },
+            {
+              "year": "2026",
+              "point": "ISRO's chief says four launch pads will be ready by 2029.",
+              "source": "article"
+            }
+          ],
+          "key_people": [
+            {
+              "name": "V. Narayanan",
+              "kind": "person",
+              "role": "Head of ISRO, India's space agency",
+              "country": "India",
+              "why_they_matter": "He announced the plan and leads the people building India's rockets.",
+              "source": "article"
+            },
+            {
+              "name": "ISRO",
+              "kind": "organisation",
+              "role": "India's space agency",
+              "country": "India",
+              "why_they_matter": "It builds and launches India's rockets and satellites, including the ones behind your phone's maps.",
+              "source": "article"
+            },
+            {
+              "name": "Launch pad",
+              "kind": "term",
+              "role": "The platform a rocket stands on while it is prepared and launched",
+              "country": "",
+              "why_they_matter": "Each pad can handle one rocket at a time, so the number of pads limits how often India can launch.",
+              "source": "background"
+            }
+          ],
+          "side_stories": [
+            {
+              "point": "Gaganyaan, India's mission to send astronauts to space, will need a busy and reliable launch schedule.",
+              "source": "background"
+            },
+            {
+              "point": "Private Indian companies are now building rockets too, and they also need places to launch from.",
+              "source": "background"
+            }
+          ],
+          "fun_facts": [
+            {
+              "point": "Sriharikota is an island between a lake and the sea, a safe spot to launch rockets out over the water.",
+              "source": "background"
+            },
+            {
+              "point": "Launching closer to the equator gives rockets a free push from Earth's spin, which saves fuel.",
+              "source": "background"
+            }
+          ],
+          "quiz": [
+            {
+              "question": "How many working launch pads does ISRO plan to have by 2029?",
+              "options": [
+                "Two",
+                "Three",
+                "Four",
+                "Ten"
+              ],
+              "answer_index": 2,
+              "why": "ISRO's chief said India will have four launch pads by 2029."
+            },
+            {
+              "question": "Where does India launch its big rockets from today?",
+              "options": [
+                "Thumba",
+                "Sriharikota",
+                "Delhi",
+                "Mumbai"
+              ],
+              "answer_index": 1,
+              "why": "Today's two pads are at Sriharikota in Andhra Pradesh."
+            },
+            {
+              "question": "Why do more launch pads help?",
+              "options": [
+                "Rockets become cheaper to paint",
+                "ISRO can prepare and launch more rockets",
+                "Rockets fly faster",
+                "Satellites become smaller"
+              ],
+              "answer_index": 1,
+              "why": "Each rocket needs weeks on its pad, so more pads mean more launches."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "agrivoltaics",
+      "title": "Farming under solar panels",
+      "teaser": "India wants farmers to grow crops and electricity on the same land.",
+      "bucket": "national",
+      "topic": "Environment",
+      "safety": "fine",
+      "source": {
+        "name": "SolarQuarter",
+        "url": "https://solarquarter.com/2026/10/22/india-hosts-agrivoltaics-world-conference-2026-announces-new-programme-under-pm-kusum/"
+      },
+      "explanations": {}
+    },
+    {
+      "id": "para-games-record",
+      "title": "India's record 114 medals at the Asian Para Games",
+      "teaser": "Our para-athletes just had their best Games ever.",
+      "bucket": "national",
+      "topic": "Sports",
+      "safety": "fine",
+      "source": {
+        "name": "News on AIR",
+        "url": "https://newsonair.gov.in/india-shine-at-asian-para-games-2026-with-record-114-medal-haul/"
+      },
+      "explanations": {}
+    },
+    {
+      "id": "imf-growth",
+      "title": "IMF says India's economy will grow 7%",
+      "teaser": "What it means when the world's money experts praise India.",
+      "bucket": "national",
+      "topic": "Economy",
+      "safety": "fine",
+      "source": {
+        "name": "Morung Express",
+        "url": "https://morungexpress.com/imf-raises-indias-growth-forecast-to-7-pc-keeps-it-among-fastest-growing-major-economies"
+      },
+      "explanations": {}
+    },
+    {
+      "id": "sco-dialogue",
+      "title": "India hosts the first SCO Civilisational Dialogue",
+      "teaser": "Neighbouring countries meet in Delhi to talk about culture.",
+      "bucket": "national",
+      "topic": "World affairs",
+      "safety": "fine",
+      "source": {
+        "name": "Swarajya",
+        "url": "https://swarajyamag.com/news-brief/india-invites-pakistan-culture-minister-to-first-sco-civilisational-dialogue-in-delhi"
+      },
+      "explanations": {}
+    },
+    {
+      "id": "yamuna-cleanup",
+      "title": "A ₹8,941 crore plan to clean the Yamuna",
+      "teaser": "Why Delhi's river got so dirty, and how it can be fixed.",
+      "bucket": "regional",
+      "topic": "Environment",
+      "safety": "fine",
+      "source": {
+        "name": "CareerIndia",
+        "url": "https://www.careerindia.com/news/school-assembly-news-headlines-today-october-23-2026-national-international-education-sport-067509.html"
+      },
+      "explanations": {}
+    },
+    {
+      "id": "cyclone-arnab",
+      "title": "Cyclone Arnab hits India's east coast",
+      "teaser": "How cyclones form, and why moving people early saves lives.",
+      "bucket": "regional",
+      "topic": "Weather",
+      "safety": "heavy",
+      "source": {
+        "name": "Daily Jagran",
+        "url": "https://www.thedailyjagran.com/education/news/todays-school-assembly-news-headline-october-28-check-top-national-international-and-sports-news-here-10334170"
+      },
+      "explanations": {}
+    },
+    {
+      "id": "sirpur-unesco",
+      "title": "Sirpur joins UNESCO's tentative World Heritage list",
+      "teaser": "An ancient town in Chhattisgarh gets a shot at world fame.",
+      "bucket": "regional",
+      "topic": "History",
+      "safety": "fine",
+      "source": {
+        "name": "CareerIndia",
+        "url": "https://www.careerindia.com/news/school-assembly-news-headlines-today-october-22-2026-national-international-education-sport-067455.html"
+      },
+      "explanations": {}
+    },
+    {
+      "id": "unsc-reform",
+      "title": "India: new UN Security Council seats need veto power",
+      "teaser": "Why India wants a fair seat at the world's top table.",
+      "bucket": "international",
+      "topic": "World affairs",
+      "safety": "fine",
+      "source": {
+        "name": "Business Standard",
+        "url": "https://www.business-standard.com/world-news/new-unsc-permanent-members-without-veto-would-be-second-class-india-126102700120_1.html"
+      },
+      "explanations": {}
+    },
+    {
+      "id": "helium-critical",
+      "title": "The US calls helium a 'critical material'",
+      "teaser": "From party balloons to hospital scanners, helium matters more than you think.",
+      "bucket": "international",
+      "topic": "Science",
+      "safety": "fine",
+      "source": {
+        "name": "US Department of Energy",
+        "url": "https://www.energy.gov/node/4860914"
+      },
+      "explanations": {}
+    }
+  ]
+}

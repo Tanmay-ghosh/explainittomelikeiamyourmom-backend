@@ -159,6 +159,13 @@ screen without scrolling, so respect these limits strictly. Shorter is better.
 
 1. headline: a short, clear title under 8 words.
 
+1b. motifs: 4 or 5 single emoji that picture this specific material (for
+   example a story about ISRO launch pads: "🚀", "🛰️", "🌕", "🏝️"). They are
+   drawn faintly in the card backgrounds. Prefer concrete objects from the
+   story over generic symbols. Never use flags, people's faces, weapons,
+   blood, skulls or anything frightening; for "heavy" topics pick calm,
+   helpful symbols (for a cyclone: "🌀", "🏠", "🤝", "📻").
+
 2. in_3_lines: exactly 3 lines, each under 18 words. Together they say what
    this is about, the key point, and why it matters to the student. For news,
    cover who, what, where and when.
@@ -205,6 +212,7 @@ Respond with a JSON object in exactly this shape:
 {{
   "headline": "string",
   "gentle_note": "string or null",
+  "motifs": ["emoji", "emoji", "emoji", "emoji"],
   "in_3_lines": ["string", "string", "string"],
   "why_explainers": [
     {{"question": "string", "answer": "string", "source": "article|background"}}
