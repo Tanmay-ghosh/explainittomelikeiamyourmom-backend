@@ -323,7 +323,8 @@ def run_writer(client, article_text: str, expert_notes: dict, level_instructions
             # Compact JSON: fewer tokens for the Writer to read.
             expert_notes=json.dumps(expert_notes, ensure_ascii=False, separators=(",", ":")),
         ),
-        max_tokens=8000,
+        # Hindi and Bengali need several times more tokens than English for the same text
+        max_tokens=8000 if language == "English" else 16000,
         required_keys=WRITER_KEYS,
     )
     usage["model"] = WRITER_MODEL

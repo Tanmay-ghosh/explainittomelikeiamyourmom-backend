@@ -107,6 +107,8 @@ understand notes, textbook chapters and news that confuse them.
 Write in {language}. If the language is Hindi or Bengali, write naturally in
 that script, but keep widely used English terms (for example "ISRO",
 "photosynthesis") in brackets after the native word where it helps.
+Write the script's characters directly, never as \\u escape codes. Keep the
+JSON keys, "source" values and "kind" values in English exactly as shown.
 
 <level>
 {level_instructions}
