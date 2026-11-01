@@ -605,6 +605,52 @@ def _load_stories() -> dict:
 
 WEEKLY = _load_stories()
 
+# Proximity: each language's feed puts stories from its home region first.
+# "core" is where most readers of that language live; "near" is the wider neighbourhood.
+HOME_STATES = {
+    "Hindi": {
+        "core": {
+            "Delhi", "Uttar Pradesh", "Bihar", "Madhya Pradesh", "Rajasthan", "Haryana", "Uttarakhand",
+            "Himachal Pradesh", "Chhattisgarh", "Jharkhand", "Chandigarh",
+        },
+        "near": {"Punjab", "Jammu and Kashmir", "Ladakh"},
+    },
+    "Bengali": {
+        "core": {"West Bengal", "Tripura"},
+        "near": {
+            "Odisha", "Bihar", "Jharkhand", "Assam", "Meghalaya", "Manipur", "Mizoram", "Nagaland",
+            "Arunachal Pradesh", "Sikkim", "Andaman and Nicobar Islands",
+        },
+    },
+}
+
+
+def _load_regions() -> dict:
+    """stories/regions.json maps a regional story id to the states it is about. Optional."""
+    path = STORIES_DIR / "regions.json"
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError) as exc:
+        log.warning("Skipping %s: %s", path, exc)
+        return {}
+    return {sid: set(states) for sid, states in raw.items() if isinstance(states, list)}
+
+
+REGIONS = _load_regions()
+
+
+def _closeness(story_id: str, language: str) -> int:
+    """2 = the reader's core region, 1 = a neighbouring region, 0 = elsewhere or national."""
+    home = HOME_STATES.get(language)
+    states = REGIONS.get(story_id, set())
+    if not home or not states:
+        return 0
+    if states & home["core"]:
+        return 2
+    return 1 if states & home["near"] else 0
+
 
 def _story_in(entry: dict, language: str) -> tuple[dict, dict | None]:
     """The story card fields in the chosen language, and its translation if there is one."""
@@ -622,7 +668,11 @@ def list_stories(language: str = "English"):
     stories = []
     for s in WEEKLY["stories"]:
         story, t = _story_in(s, language)
-        stories.append({**story, "language": language if t else "English"})
+        closeness = _closeness(story["id"], language)
+        stories.append({**story, "language": language if t else "English", "near_you": closeness > 0, "_c": closeness})
+    # Stories from the reader's own region come first, then neighbouring regions;
+    # everything else keeps its ranked order (sorted() is stable).
+    stories = [{k: v for k, v in item.items() if k != "_c"} for item in sorted(stories, key=lambda item: -item["_c"])]
     return {"week_label": WEEKLY["week_label"], "stories": stories}
 
 
