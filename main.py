@@ -571,6 +571,19 @@ def _load_translations(story_ids: set) -> dict:
     return out
 
 
+def _load_icons() -> dict:
+    """stories/icons.json maps a story id to the icon that matches the article. Optional."""
+    path = STORIES_DIR / "icons.json"
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError) as exc:
+        log.warning("Skipping %s: %s", path, exc)
+        return {}
+    return {sid: name for sid, name in raw.items() if not sid.startswith("_") and isinstance(name, str)}
+
+
 def _load_stories() -> dict:
     """Load and normalise this week's stories (and any translations) once, at startup."""
     try:
@@ -579,10 +592,12 @@ def _load_stories() -> dict:
         log.warning("No stories file at %s", STORIES_FILE)
         return {"week_label": "", "stories": []}
     stories = []
+    icons = _load_icons()
     for item in raw.get("stories", []):
         safety = item.get("safety") if item.get("safety") in ("fine", "heavy") else "fine"
         story = {f: item.get(f) for f in STORY_FIELDS}
         story["safety"] = safety
+        story["icon"] = icons.get(story["id"])
         explanations = {
             level: normalize_explanation(exp, safety)
             for level, exp in (item.get("explanations") or {}).items()
