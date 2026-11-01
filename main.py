@@ -322,14 +322,20 @@ def process_new_article(job: dict, text: str, url: str, files: list[tuple[str, b
         set_status(job, "reading")
         if files:
             parts, reading = [], {"input_tokens": 0, "output_tokens": 0, "seconds": 0.0, "images": 0}
-            for name, data in files:
+            # Photos are read at the same time, not one after another (speed).
+            def read_one(item):
+                name, data = item
                 if name.lower().endswith(IMAGE_EXTENSIONS):
-                    part, usage = text_from_image(get_client(), data)
-                    for k in ("input_tokens", "output_tokens", "seconds"):
+                    return text_from_image(get_client(), data)
+                return text_from_pdf(data), None
+            with ThreadPoolExecutor(max_workers=max(1, len(files))) as pool:
+                results = list(pool.map(read_one, files))  # keeps page order
+            for part, usage in results:
+                if usage:
+                    for k in ("input_tokens", "output_tokens"):
                         reading[k] += usage[k]
+                    reading["seconds"] = max(reading["seconds"], usage["seconds"])
                     reading["images"] += 1
-                else:
-                    part = text_from_pdf(data)
                 parts.append(part)
             raw = "\n\n".join(parts)
             if reading["images"]:

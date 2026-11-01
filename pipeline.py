@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import anthropic
 from pypdf import PdfReader
@@ -308,25 +309,63 @@ def run_expert(client, article_text: str, input_type: str = "text"):
     return notes, usage
 
 
-def run_writer(client, article_text: str, expert_notes: dict, level_instructions: str, language: str):
-    """Layer 2: turn the teacher's notes into the student-facing explanation."""
-    result, usage = _call_json(
+# Speed: the Writer's reply is long, and output length is what makes it slow.
+# So it is written as two halves at the same time, each about half as long:
+# the reading pages first, the backstory/people/facts/quiz second. Set
+# WRITER_SPLIT=0 on Cloud Run to go back to one call.
+WRITER_SPLIT = os.environ.get("WRITER_SPLIT", "1") != "0"
+WRITER_PARTS = (
+    (("headline", "gentle_note", "motifs", "in_3_lines", "why_explainers"), ["headline", "in_3_lines"]),
+    (("backstory", "key_people", "side_stories", "fun_facts", "quiz"), ["quiz"]),
+)
+PART_INSTRUCTION = """
+
+For this reply, write ONLY these fields of the JSON object: {fields}.
+Leave out every other field; another writer is doing those at the same time.
+Follow all the other rules exactly as usual."""
+
+
+def _writer_call(client, system: str, user: str, language: str, required_keys):
+    return _call_json(
         client,
         WRITER_MODEL,
-        WRITER_SYSTEM.format(language=language, level_instructions=level_instructions),
-        WRITER_USER.format(
-            material_block=(
-                f"Here is the original material:\n\n<material>\n{article_text}\n</material>\n\n"
-                if WRITER_ARTICLE_CHARS and len(article_text) <= WRITER_ARTICLE_CHARS
-                else ""
-            ),
-            # Compact JSON: fewer tokens for the Writer to read.
-            expert_notes=json.dumps(expert_notes, ensure_ascii=False, separators=(",", ":")),
-        ),
+        system,
+        user,
         # Hindi and Bengali need several times more tokens than English for the same text
         max_tokens=8000 if language == "English" else 16000,
-        required_keys=WRITER_KEYS,
+        required_keys=required_keys,
     )
+
+
+def run_writer(client, article_text: str, expert_notes: dict, level_instructions: str, language: str):
+    """Layer 2: turn the teacher's notes into the student-facing explanation."""
+    system = WRITER_SYSTEM.format(language=language, level_instructions=level_instructions)
+    user = WRITER_USER.format(
+        material_block=(
+            f"Here is the original material:\n\n<material>\n{article_text}\n</material>\n\n"
+            if WRITER_ARTICLE_CHARS and len(article_text) <= WRITER_ARTICLE_CHARS
+            else ""
+        ),
+        # Compact JSON: fewer tokens for the Writer to read.
+        expert_notes=json.dumps(expert_notes, ensure_ascii=False, separators=(",", ":")),
+    )
+    if not WRITER_SPLIT:
+        result, usage = _writer_call(client, system, user, language, WRITER_KEYS)
+    else:
+        with ThreadPoolExecutor(max_workers=len(WRITER_PARTS)) as pool:
+            futures = [
+                pool.submit(_writer_call, client, system, user + PART_INSTRUCTION.format(fields=", ".join(fields)), language, required)
+                for fields, required in WRITER_PARTS
+            ]
+            halves = [f.result() for f in futures]  # re-raises an ExplainError from either half
+        result = {}
+        for (fields, _), (data, _) in zip(WRITER_PARTS, halves):
+            result.update({k: data[k] for k in fields if k in data})
+        usage = {k: sum(u.get(k, 0) for _, u in halves)
+                 for k in ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens")}
+        usage["seconds"] = max(u.get("seconds", 0) for _, u in halves)  # the halves run side by side
+        usage["attempts"] = max(u.get("attempts", 1) for _, u in halves)
+        usage["parts"] = len(halves)
     usage["model"] = WRITER_MODEL
     return normalize_explanation(result, expert_notes.get("safety", "fine")), usage
 
