@@ -491,6 +491,14 @@ async def start_explanation(
     else:
         raise HTTPException(400, "Paste some text, upload a file, or add a link first.")
 
+    # A link to one of this week's stories (e.g. a "Try one" example): answer instantly, free.
+    if input_type == "link":
+        entry = URL_INDEX.get(_norm_url(url))
+        if entry is not None:
+            job = new_job(level, language, input_type, x_distinct_id)
+            if serve_weekly(job, entry):
+                return public_view(job)
+
     # Same pasted article already explained at this class level and language: answer instantly, free.
     if input_type == "text":
         try:
@@ -523,6 +531,12 @@ def explain_again(
 ):
     """Same material, different class level or language. Reuses the expert's notes."""
     validate_level_language(body.level, body.language)
+    if body.article_id.startswith("weekly:"):
+        entry = _weekly_entry(body.article_id.split(":", 1)[1])
+        if entry is not None:
+            job = new_job(body.level, body.language, "rewrite", x_distinct_id)
+            if serve_weekly(job, entry):
+                return public_view(job)
     if articles.get(body.article_id) is None:
         raise HTTPException(404, "This took too long and expired. Please share it again.")
 
@@ -691,14 +705,12 @@ def list_stories(language: str = "English"):
     return {"week_label": WEEKLY["week_label"], "stories": stories}
 
 
-@app.get("/stories/{story_id}")
-def get_story(story_id: str, level: str = DEFAULT_LEVEL, language: str = "English"):
-    """One story at a class level and language. Falls back to English if a translation is missing.
-    explanation is null while a story is still being prepared."""
-    validate_level_language(level, language)
-    entry = next((s for s in WEEKLY["stories"] if s["story"]["id"] == story_id), None)
-    if entry is None:
-        raise HTTPException(404, "We couldn't find that story.")
+def _weekly_entry(story_id: str):
+    return next((s for s in WEEKLY["stories"] if s["story"]["id"] == story_id), None)
+
+
+def _weekly_explanation(entry: dict, level: str, language: str) -> dict:
+    """A weekly story at a class level and language, falling back to English and the closest level."""
     story, t = _story_in(entry, language)
     if t and t["explanation"]:
         return {"story": story, "level": level, "language": language, "explanation": t["explanation"]}
@@ -713,3 +725,88 @@ def get_story(story_id: str, level: str = DEFAULT_LEVEL, language: str = "Englis
         "language": "English",
         "explanation": explanations.get(chosen) if chosen else None,
     }
+
+
+@app.get("/stories/{story_id}")
+def get_story(story_id: str, level: str = DEFAULT_LEVEL, language: str = "English"):
+    """One story at a class level and language. Falls back to English if a translation is missing.
+    explanation is null while a story is still being prepared."""
+    validate_level_language(level, language)
+    entry = _weekly_entry(story_id)
+    if entry is None:
+        raise HTTPException(404, "We couldn't find that story.")
+    return _weekly_explanation(entry, level, language)
+
+
+# ---------- "Try one" examples ----------
+# Real article links whose explanation is already written (they are weekly stories).
+# A kid who taps one sees the link go into the search bar and gets the explanation instantly, for free.
+
+def _norm_url(url: str) -> str:
+    url = url.strip().split("#", 1)[0].rstrip("/").lower()
+    for prefix in ("https://", "http://"):
+        if url.startswith(prefix):
+            url = url[len(prefix):]
+    return url[4:] if url.startswith("www.") else url
+
+
+def _url_index() -> dict:
+    """Article link -> weekly story, only for links that belong to exactly one story."""
+    counts: dict[str, list] = {}
+    for entry in WEEKLY["stories"]:
+        url = (entry["story"].get("source") or {}).get("url") or ""
+        if url.startswith("http"):
+            counts.setdefault(_norm_url(url), []).append(entry)
+    return {u: entries[0] for u, entries in counts.items() if len(entries) == 1}
+
+
+def _load_examples() -> dict:
+    path = STORIES_DIR / "examples.json"
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError) as exc:
+        log.warning("Skipping %s: %s", path, exc)
+        return {}
+    return {k: v for k, v in raw.items() if not k.startswith("_") and isinstance(v, list)}
+
+
+URL_INDEX = _url_index()
+EXAMPLES = _load_examples()
+
+
+@app.get("/examples")
+def list_examples(language: str = "English"):
+    """A few ready-made article links to show kids how the search bar works."""
+    if language not in LANGUAGES:
+        language = "English"
+    ids = EXAMPLES.get(language) or EXAMPLES.get("English") or []
+    out = []
+    for sid in ids:
+        entry = _weekly_entry(sid)
+        url = (entry["story"].get("source") or {}).get("url") if entry else None
+        if not entry or not url or _norm_url(url) not in URL_INDEX:
+            continue
+        story, _ = _story_in(entry, language)
+        out.append({"story_id": sid, "label": story["title"], "url": url, "icon": story.get("icon")})
+    return {"examples": out}
+
+
+def serve_weekly(job: dict, entry: dict) -> bool:
+    """Finish a job straight away from a weekly story's ready explanation. False if it has none."""
+    found = _weekly_explanation(entry, job["level"], job["language"])
+    if not found["explanation"]:
+        return False
+    job["article_id"] = f"weekly:{entry['story']['id']}"
+    job["explanation"] = found["explanation"]
+    job["meta"] = {"subject": entry["story"].get("topic"), "story_id": entry["story"]["id"], "example": True}
+    set_status(job, "done")
+    job["finished_at"] = time.time()
+    analytics.track(job["distinct_id"], "Example Served", {
+        "story_id": entry["story"]["id"],
+        "level": job["level"],
+        "language": job["language"],
+        "input_type": job["input_type"],
+    })
+    return True
