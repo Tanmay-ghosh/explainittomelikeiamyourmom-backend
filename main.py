@@ -7,6 +7,8 @@ The Lovable frontend talks to this server. Flow:
                             (reuses the expert notes, so it's fast and cheap)
   4. GET  /stories       -> this week's ready-made stories
   5. GET  /stories/{id}  -> one story's explanation at a class level
+  6. GET  /feed          -> the whole "This week" page (cards + 3 lines) in one response
+  7. GET  /examples      -> "Try one" article links for the search bar
 
 Jobs and caches live in memory, so run exactly ONE server process.
 """
@@ -24,8 +26,9 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 import anthropic
-from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, Header, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel
 
 import analytics
@@ -391,6 +394,8 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
+# Compress bigger responses (the weekly feed shrinks to about a fifth of its size).
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
 def _openapi_with_file_picker():
@@ -703,6 +708,31 @@ def list_stories(language: str = "English"):
     # everything else keeps its ranked order (sorted() is stable).
     stories = [{k: v for k, v in item.items() if k != "_c"} for item in sorted(stories, key=lambda item: -item["_c"])]
     return {"week_label": WEEKLY["week_label"], "stories": stories}
+
+
+@app.get("/feed")
+def weekly_feed(response: Response, language: str = "English", level: str = DEFAULT_LEVEL):
+    """Everything the "This week" page shows, in ONE response: each story card plus its 3 lines,
+    its hook question and picture symbols. (Saves the page from fetching 70 stories one by one.)"""
+    validate_level_language(level, language)
+    listing = list_stories(language)
+    by_id = {s["story"]["id"]: s for s in WEEKLY["stories"]}
+    cards = []
+    for story in listing["stories"]:
+        exp = _weekly_explanation(by_id[story["id"]], level, language)["explanation"]
+        whys = (exp or {}).get("why_explainers") or []
+        cards.append({
+            **story,
+            "card": None if exp is None else {
+                "safety": exp.get("safety"),
+                "in_3_lines": exp.get("in_3_lines") or [],
+                "hook": whys[0].get("question") if whys else None,
+                "motifs": exp.get("motifs") or [],
+            },
+        })
+    # Stories only change when a new file is deployed, so browsers may reuse this for a few minutes.
+    response.headers["Cache-Control"] = "public, max-age=300"
+    return {"week_label": listing["week_label"], "level": level, "language": language, "stories": cards}
 
 
 def _weekly_entry(story_id: str):
