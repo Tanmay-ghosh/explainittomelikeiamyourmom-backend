@@ -1,0 +1,6 @@
+{
+ "_how_to_update": "Weekly story ids to offer as 'Try one' examples under the search bar. Each must have its own article link (not a daily digest page shared by several stories). Clicking one pastes that link into the search bar and opens the explanation that is already written, so it is instant and free.",
+ "English": ["isro-four-launch-pads", "cyclone-arnab", "arunachal-kiwi"],
+ "Hindi": ["delhi-air-stubble", "isro-four-launch-pads", "para-games-record"],
+ "Bengali": ["cyclone-arnab", "coral-reefs", "isro-four-launch-pads"]
+}
